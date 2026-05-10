@@ -36,9 +36,9 @@ PIOA-ГРУППА/
 
 ├── tests/
 
-│   ── test\_memory.py
+│   ├── test_memory.py
 
-│     ├──  \_init\_.py
+│   └──  _init_.py
 
 │
 
