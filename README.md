@@ -18,7 +18,7 @@ PIOA-ГРУППА/
 
 │       ├── backend/
 
-│       │   ├── \_\_init\_\_.py
+│       │   ├── \\\_init\\\_.py
 
 │       │   ├── memory.py
 
@@ -26,7 +26,7 @@ PIOA-ГРУППА/
 
 │       │
 
-│       ├── \_\_init\_\_.py
+│       ├── \\\_init\\\_.py
 
 │       ├── main.py
 
@@ -36,7 +36,9 @@ PIOA-ГРУППА/
 
 ├── tests/
 
-│   └── test\_memory.py
+│   ── test\\\_memory.py
+
+│     ├──  \\\_init\\\_.py
 
 │
 
@@ -76,27 +78,27 @@ PIOA-ГРУППА/
 
 \#### Работа с таблицами:
 
-\- `create\_table` — создание таблицы
+\- `create\\\_table` — создание таблицы
 
-\- `use\_table` — выбор активной таблицы
+\- `use\\\_table` — выбор активной таблицы
 
-\- `list\_tables` — список таблиц
+\- `list\\\_tables` — список таблиц
 
-\- `get\_table` — получение текущей таблицы
-
-
-
-\#### CRUD операции:
+\- `get\\\_table` — получение текущей таблицы
 
 
 
-\- CREATE — `create\_record`
+\####CRUD операции:
 
-\- READ — `select\_record`
 
-\- UPDATE — `update\_record`
 
-\- DELETE — `delete\_record`
+\- CREATE — `create\\\_record`
+
+\- READ — `select\\\_record`
+
+\- UPDATE — `update\\\_record`
+
+\- DELETE — `delete\\\_record`
 
 
 
