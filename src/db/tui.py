@@ -1,256 +1,185 @@
-# Импортируем из модуля backend.memory функции, реализующие операции
-# создания записи и выборки записей из таблицы.
-from .backend.memory import  (
-    create_db,
-    create_table,
-    use_table,
-    list_tables,
-    create_record,
-    select_record,
-    update_record,
-    delete_record,
-)
+from .backend.memory import Database
+from .backend.errors import *
 
-# создание базы таблиц(dict)
-db = create_db()
 
-# создает новую таблицу
-def _create_table():
-    name = input("Название таблицы: ").strip()
+class TUI:
 
-    try:
-        create_table(db, name)
-        print("Таблица создана")
-    except ValueError as e:
-        print("Ошибка:", e)
+    def __init__(self):
+        self.db = Database()
 
-# переключает активную таблицу
-def _switch_table():
-    name = input("Имя таблицы: ").strip()
+    def run(self):
 
-    try:
-        use_table(db, name)
-        print("Текущая таблица:", name)
-    except ValueError as e:
-        print("Ошибка:", e)
+        while True:
 
-# возвращает текущую таблицу
-def _show_tables():
-    tables = list_tables(db)
+            print("\n=== МЕНЮ ===")
+            print("Текущая таблица:", self.db.get_current_name())
+            print("1. Создать таблицу")
+            print("2. Добавить запись")
+            print("3. Показать записи")
+            print("4. Обновить запись")
+            print("5. Удалить запись")
+            print("6. Список таблиц")
+            print("7. Сортировка")
+            print("8. Переключить таблицу")
+            print("0. Выход")
 
-    if not tables:
-        print("Таблиц нет")
-        return
+            c = input(">>> ")
 
-    print("Таблицы:")
-    for t in tables:
-        print("-", t)
+            try:
 
-# Функция вывода текстового меню в консоль.
-def _print_menu() -> None:
-    # Символ \n обозначает перевод строки.
-    print("\n=== База студентов ===")
-    print("1. Добавить запись")
-    print("2. Показать все записи")
-    print("3. Найти записи по фильтру")
-    print("4. Обновить запись")  
-    print("5. Удалить запись")
-    print("6. Создать таблицу")
-    print("7. Выбрать таблицу")
-    print("8. Показать таблицы")
-    print("0. Выход")
+                # создает новую таблицу
+                if c == "1":
 
-# Функция чтения целочисленного значения из консоли.
-def _read_int(prompt: str) -> int:
-    # Используется цикл с повторением до получения корректного ввода.
-    while True:
-        # Получение строки из консоли с удалением пробельных символов
-        # в начале и в конце строки.
-        raw = input(prompt).strip()
-        try:
-            # Преобразование строки к целому числу.
-            return int(raw)
-        except ValueError:
-            # Исключение возникает при невозможности преобразования.
-            # Пользователю выводится сообщение об ошибке,
-            # после чего ввод повторяется.
-            print("Ошибка: введите целое число.")
+                    name = input("Имя таблицы: ").strip()
+                    n = int(input("Количество полей: "))
 
-# Функция добавления новой записи в базу данных.
-def _add_student() -> None:
-    print("\nДобавление записи")
-    student_id = _read_int("id: ")
-    first_name = input("first_name: ").strip()
-    second_name = input("second_name: ").strip()
-    age = _read_int("age: ")
-    sex = input("sex: ").strip()
+                    schema = {}
 
-    try:
-        # Вызов функции слоя бизнес-логики.
-        record = create_record(db, student_id, first_name, second_name, age, sex)
+                    for _ in range(n):
+                        f = input("Имя поля: ").strip()
+                        t = input("Тип (int/float/str): ").strip()
+                        schema[f] = t
 
-        # В случае успешного добавления запись выводится в консоль.
-        print(f"Запись добавлена: {record}")
+                    self.db.create_table(name, schema)
 
-    except ValueError as exc:
-        # Обработка ошибок валидации.
-        print(f"Ошибка: {exc}")
+                # добавление новой записи в базу данных
+                elif c == "2":
 
-# Вспомогательная функция вывода списка записей.
-def _print_records(records: list[tuple[int, str, str, int, str]]) -> None:
-    # Проверка на пустой список.
-    if not records:
-        print("Записи не найдены.")
-        return
+                    table = self.db.get_table()
+                    record = {}
 
-    # Последовательный вывод записей.
-    for record in records:
-        print(record)
+                    for field, ttype in table.schema.items():
 
-# Функция вывода всех записей из базы данных.
-def _show_all_students() -> None:
-    print("\nСписок записей")
-    _print_records(select_record(db))
+                        while True:
 
-# Функция чтения необязательного целочисленного значения.
-# Пустой ввод интерпретируется как отсутствие фильтра (None).
-def _read_optional_int(prompt: str) -> int | None:
-    while True:
-        raw = input(prompt).strip()
+                            value = input(f"{field} ({ttype}): ").strip()
 
-        if raw == "":
-            return None
+                            if value == "":
+                                print("Ошибка: поле не может быть пустым.")
+                                continue
 
-        try:
-            return int(raw)
-        except ValueError:
-            print("Ошибка: введите целое число или оставьте поле пустым.")
+                            try:
 
-# Функция поиска записей по заданным фильтрам.
-def _find_students_by_filter() -> None:
-    print("\nПоиск по фильтру (Enter = пропустить поле)")
+                                if ttype == "int":
+                                    value = int(value)
 
-    student_id = _read_optional_int("id: ")
+                                elif ttype == "float":
+                                    value = float(value)
 
-    # Оператор `or` возвращает первое истинное значение.
-    # Если строка после strip() пуста, будет возвращено None.
-    first_name = input("first_name: ").strip() or None
-    second_name = input("second_name: ").strip() or None
+                                else:
+                                    if value.replace("-", "").replace(".", "").isdigit():
+                                        print("Ошибка: строка не может быть числом.")
+                                        continue
+                                    value = str(value)
 
-    age = _read_optional_int("age: ")
-    sex = input("sex: ").strip() or None
+                                record[field] = value
+                                break
 
-    records = select_record(
-        db,
-        student_id=student_id,
-        first_name=first_name,
-        second_name=second_name,
-        age=age,
-        sex=sex,
-    )
+                            except:
+                                print(f"Ошибка типа поля '{field}'")
 
-    _print_records(records)
+                    table.insert(record)
+                    print("Запись добавлена.")
 
-# Функция обновления поля существующей записи по идентификатору или фильтру.
-def _update_student() -> None:
-    print("\nОбновление записи (Enter = пропустить поле)")
+                # вывод списка записей
+                elif c == "3":
 
-    student_id = _read_int("id: ")
+                    table = self.db.get_table()
 
-    print("Оставь поле пустым, чтобы не изменять")
+                    for r in table.select():
+                        print(r)
 
-    first_name = input("first_name: ").strip() or None
-    second_name = input("second_name: ").strip() or None
+                # обновления поля существующей записи по идентификатору или фильтру
+                elif c == "4":
 
-    age = _read_optional_int("age: ")
+                    table = self.db.get_table()
 
-    sex = input("sex: ").strip() or None
+                    fk = input("Фильтр поле (Enter = пропустить): ").strip()
+                    fv = input("Значение (Enter = пропустить): ").strip()
 
-    try:
-        record = update_record(
-            db,
-            student_id,
-            first_name=first_name,
-            second_name=second_name,
-            age=age,
-            sex=sex,
-        )
-        print(f"Обновлено: {record}")
+                    filters = {}
+                    if fk and fv:
+                        filters[fk] = fv
 
-    except ValueError as exc:
-        print(f"Ошибка: {exc}")
+                    uk = input("Поле изменения: ").strip()
 
-#Функция удаления записи из таблицы по идентификатору или фильтру
-def _delete_student() -> None:
-    print("\nУдаление записи (Enter = пропустить поле)")
+                    if uk not in table.schema:
+                        print("Ошибка: поле не существует")
+                        continue
 
-    student_id = _read_optional_int("id: ")
+                    uv = input(f"Новое значение ({table.schema[uk]}): ").strip()
 
-    first_name = input("first_name: ").strip() or None
-    second_name = input("second_name: ").strip() or None
-    age = _read_optional_int("age: ")
-    sex = input("sex: ").strip() or None
+                    if uv == "":
+                        print("Ошибка: значение не может быть пустым")
+                        continue
 
-    count = delete_record(
-        db,
-        student_id=student_id,
-        first_name=first_name,
-        second_name=second_name,
-        age=age,
-        sex=sex,
-    )
+                    try:
 
-    if count > 0:
-        print(f"Удалено записей: {count}")
-    else:
-        print("Ничего не найдено для удаления.")
+                        if table.schema[uk] == "int":
+                            uv = int(uv)
+                        elif table.schema[uk] == "float":
+                            uv = float(uv)
+                        else:
+                            uv = str(uv)
 
-def run() -> None:
-    """
-    Запускает основной цикл текстового пользовательского интерфейса.
+                    except:
+                        print("Ошибка типа данных")
+                        continue
 
-    Цикл выполняется до тех пор, пока пользователь явно
-    не выберет завершение программы.
-    """
-    while True:
-        # Отображение меню доступных действий.
-        _print_menu()
+                    print("Обновлено:", table.update(filters, {uk: uv}))
 
-        # Получение команды пользователя.
-        # Метод strip() удаляет пробельные символы
-        # в начале и в конце строки.
-        action = input("Выберите действие: ").strip()
+                # удаления записи 
+                elif c == "5":
 
-        # Диспетчеризация пользовательской команды.
-        if action == "1":
-            _add_student()
+                    table = self.db.get_table()
 
-        elif action == "2":
-            _show_all_students()
+                    k = input("Поле (Enter = пропустить): ").strip()
+                    v = input("Значение (Enter = пропустить): ").strip()
 
-        elif action == "3":
-            _find_students_by_filter()
-            
-        elif action == "4":
-            _update_student()
+                    filters = {}
 
-        elif action == "5":
-            _delete_student()
+                    if k and v:
+                        filters[k] = v
 
-        elif action == "6":
-            _create_table()
+                    if not filters:
+                        confirm = input("Удалить ВСЕ записи? (yes/no): ").strip().lower()
+                        if confirm != "yes":
+                            print("Отмена")
+                            continue
 
-        elif action == "7":
-            _switch_table()
+                    print("Удалено:", table.delete(filters))
 
-        elif action == "8":
-            _show_tables()
+                # отображение всех таблиц
+                elif c == "6":
+                    print(self.db.list_tables())
 
-        elif action == "0":
-            # Завершение работы программы.
-            print("Выход из программы.")
-            break
+                # сортировка таблицы
+                elif c == "7":
 
-        else:
-            # Обработка некорректного ввода команды.
-            print("Неизвестная команда. Повторите ввод.")
+                    table = self.db.get_table()
+
+                    f = input("Поле сортировки: ").strip()
+                    o = input("asc/desc(по возрастанию/по убыванию) (Enter = asc): ").strip()
+
+                    asc = o != "desc"
+
+                    for r in table.sort(f, asc):
+                        print(r)
+
+                # переключение таблицы
+                elif c == "8":
+
+                    name = input("Имя таблицы: ").strip()
+                    self.db.switch_table(name)
+                    print("Переключено на:", name)
+
+                # выход из программы 
+                elif c == "0":
+                    print("Выход")
+                    break
+
+            except DatabaseError as e:
+                print("Ошибка:", e)
+
+            except Exception:
+                print("Ошибка: неверный ввод")

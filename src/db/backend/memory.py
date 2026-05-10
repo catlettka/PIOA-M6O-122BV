@@ -1,225 +1,129 @@
-# Определение пользовательского алиаса типа для записи таблицы.
-# В качестве структуры записи используется кортеж,
-# поскольку кортеж является неизменяемым типом данных.
-# Структура записи Student: (id, first_name, second_name, age, sex)
-type StudentRecord = tuple[int, str, str, int, str]
+from .errors import *
 
 
-def create_db():
+class Table:
     """
-    Создаёт словарь базу таблиц.
-
-    db хранит:
-    - tables: хранилище всех таблиц
-    - current: текущая активная таблица
+    Класс Table — представляет одну таблицу в базе данных.
+    Хранит:
+    - schema (структура таблицы)
+    - rows (записи)
     """
-    return {
-        "tables": {},  # словарь таблиц (пока пустой)
-        "current": None
-    }
+    # инициализация таблицы
+    def __init__(self, name, schema):
+        self.name = name
+        self.schema = schema
+        self.rows = []
 
-# создание новой таблицы
-def create_table(db, name: str) -> None:
-    
-    if name in db["tables"]:
-        raise ValueError("Таблица c таким именем уже существует")
+    # добовление записи в таблицу
+    def insert(self, record):
+        self.rows.append(record)
 
-    db["tables"][name] = []
+    # получение всех записей таблицы
+    def select(self):
 
-    if db["current"] is None:
-        db["current"] = name
+        if not self.rows:
+            raise EmptyTableError()
 
-# выбор текущей таблицы
-def use_table(db, name: str) -> None:
-    if name not in db["tables"]:
-        raise ValueError("Таблица c таким именем не сущесвует")
+        return self.rows
 
-    db["current"] = name
+    # сортировка записей по указанному полю
+    def sort(self, field, asc=True):
 
-# переключение текущей таблицы
-def get_table(db):
-    if db["current"] is None:
-        raise ValueError("Таблица не выбрана")
+        if field not in self.schema:
+            raise InvalidFieldError(field)
 
-    return db["tables"][db["current"]]
+        return sorted(
+            self.rows,
+            key=lambda x: x[field],
+            reverse=not asc
+        )
 
-# список таблиц
-def list_tables(db):
-    return list(db["tables"].keys())
+    # обновление записей по фильтру
+    def update(self, filters, updates):
 
-# Добавляет новую запись в существующую таблицу
-def create_record(
-    db,                # Словарь всей базы данных
-    student_id: int,   # Уникальный идентификатор записи
-    first_name: str,   # Имя
-    second_name: str,  # Фамилия
-    age: int,          # Возраст
-    sex: str,          # Пол
-):
-    table = get_table(db)
+        count = 0
+
+        for r in self.rows:
+
+            if all(str(r.get(k)) == str(v) for k, v in filters.items()):
+
+                for k, v in updates.items():
+
+                    if k not in self.schema:
+                        raise InvalidFieldError(k)
+
+                    r[k] = v
+
+                count += 1
+
+        if count == 0:
+            raise ValidationError("Записи не найдены")
+
+        return count
+
+    # удаление записей по фильтру
+    def delete(self, filters):
+
+        if not filters:
+            before = len(self.rows)
+            self.rows.clear()
+            return before
+
+        before = len(self.rows)
+
+        self.rows = [
+            r for r in self.rows
+            if not all(str(r.get(k)) == str(v) for k, v in filters.items())
+        ]
+
+        if before == len(self.rows):
+            raise ValidationError("Записи не найдены")
+
+        return before - len(self.rows)
+
+
+class Database:
     """
-    Создаёт новую запись и добавляет её в таблицу Student.
-
-    Выполняется валидация возраста и проверка уникальности идентификатора.
-    В случае нарушения условий возбуждается исключение ValueError.
-    """
-    # Проверка корректности возраста.
-    # Возраст не может быть отрицательным значением.
-    if age < 0:
-        raise ValueError("Поле age не может быть отрицательным.")
-
-    # Проверка уникальности идентификатора.
-    # Функция any() возвращает True, если хотя бы один элемент
-    # последовательности удовлетворяет условию.
-    if any(record[0] == student_id for record in table):
-        raise ValueError(f"Запись с id={student_id} уже существует.")
-
-    # Формирование новой записи.
-    # Метод strip() удаляет пробельные символы
-    # в начале и в конце строки.
-    new_record: StudentRecord = (
-        student_id,
-        first_name.strip(),
-        second_name.strip(),
-        age,
-        sex.strip(),
-    )
-
-    # Добавление записи в таблицу.
-    table.append(new_record)
-
-    # Возврат созданной записи.
-    return new_record
-
-# Возвращает записи, подходящие под запрос или фильтр
-def select_record(
-    db,
-    student_id: int | None = None,   # Фильтр по идентификатору
-    first_name: str | None = None,   # Фильтр по имени
-    second_name: str | None = None,  # Фильтр по фамилии
-    age: int | None = None,          # Фильтр по возрасту
-    sex: str | None = None,          # Фильтр по полу
-):
-    table = get_table(db)
-
-    # Проверка отсутствия всех фильтров.
-    # В этом случае возвращается копия списка,
-    # чтобы предотвратить изменение исходной таблицы
-    # внешним кодом.
-    if (
-        student_id is None
-        and first_name is None
-        and second_name is None
-        and age is None
-        and sex is None
-    ):
-        return table.copy()
-
-    # Формирование результирующего списка.
-    result = []
-
-    # Итерация по всем записям таблицы.
-    for record in table:
-
-        # Проверка соответствия каждому фильтру.
-        # Если фильтр задан и запись ему не соответствует,
-        # выполняется переход к следующей итерации цикла.
-
-        if student_id is not None and record[0] != student_id:
-            continue
-
-        if first_name is not None and record[1] != first_name:
-            continue
-
-        if second_name is not None and record[2] != second_name:
-            continue
-
-        if age is not None and record[3] != age:
-            continue
-
-        if sex is not None and record[4] != sex:
-            continue
-
-        # Если запись удовлетворяет всем заданным условиям,
-        # она добавляется в результирующий список.
-        result.append(record)
-
-    # Возврат списка найденных записей.
-    return result
-
-# Обновляет поля существующей записи по идентификатору или фильтру
-def update_record(
-    db,
-    student_id: int,
-    first_name: str | None = None,
-    second_name: str | None = None,
-    age: int | None = None,
-    sex: str | None = None,
-):
-    table = get_table(db)
-    """
-    Обновляет запись по student_id.
-    Можно менять частично (только переданные поля).
+    Класс Database — управляет всеми таблицами.
     """
 
-    for index, record in enumerate(table):
+    # создание пустой базы данных
+    def __init__(self):
+        self.tables = {}
+        self.current = None
 
-        if record[0] == student_id:
+    # создание новой таблицы
+    def create_table(self, name, schema):
 
-            # Берём текущие значения
-            updated_record = list(record)
+        if name in self.tables:
+            raise TableAlreadyExistsError(name)
 
-            # Обновляем только то, что передано
-            if first_name is not None:
-                updated_record[1] = first_name.strip()
+        self.tables[name] = Table(name, schema)
+        self.current = name
 
-            if second_name is not None:
-                updated_record[2] = second_name.strip()
+    # переключение на другую таблицу
+    def switch_table(self, name):
 
-            if age is not None:
-                if age < 0:
-                    raise ValueError("Поле age не может быть отрицательным.")
-                updated_record[3] = age
+        if name not in self.tables:
+            raise TableNotCreatedError()
 
-            if sex is not None:
-                updated_record[4] = sex.strip()
-            
+        self.current = name
 
-            table[index] = tuple(updated_record)
-            return table[index]
+    # возвращает имя текущей таблицы
+    def get_current_name(self):
+        return self.current or "не выбрана"
 
-    raise ValueError(f"Запись с id={student_id} не найдена.")
+    # получение текущей таблицы
+    def get_table(self):
 
-# Удаляет запись из таблицы по идентификатору или фильтру
-def delete_record(
-    db,
-    student_id: int | None = None,
-    first_name: str | None = None,
-    second_name: str | None = None,
-    age: int | None = None,
-    sex: str | None = None,
-) -> int:
-    """
-    Удаляет записи по id или фильтру.
-    Возвращает количество удалённых записей.
-    """
+        if not self.tables or self.current is None:
+            raise TableNotCreatedError()
 
-    table = get_table(db)
-    deleted_count = 0
-    new_table = []
+        return self.tables[self.current]
+    # список всех созданных таблиц
+    def list_tables(self):
 
-    for record in table:
-        if (
-            (student_id is None or record[0] == student_id)
-            and (first_name is None or record[1] == first_name)
-            and (second_name is None or record[2] == second_name)
-            and (age is None or record[3] == age)
-            and (sex is None or record[4] == sex)
-        ):
-            deleted_count += 1
-        else:
-            new_table.append(record)
+        if not self.tables:
+            raise TableNotCreatedError()
 
-    db["tables"][db["current"]] = new_table
-
-    return deleted_count
+        return list(self.tables.keys())
