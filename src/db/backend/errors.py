@@ -35,3 +35,7 @@ class InvalidTypeError(DatabaseError):
 class ValidationError(DatabaseError):
     def __init__(self, msg="Ошибка валидации"):
         super().__init__(msg)
+
+class InvalidSchemaError(DatabaseError):
+    def __init__(self, field):
+        super().__init__(f"Некорректное имя поля: '{field}'")

@@ -21,6 +21,7 @@ class TUI:
             print("6. Список таблиц")
             print("7. Сортировка")
             print("8. Переключить таблицу")
+            print("9. Поиск записи")
             print("0. Выход")
 
             c = input(">>> ")
@@ -172,6 +173,21 @@ class TUI:
                     name = input("Имя таблицы: ").strip()
                     self.db.switch_table(name)
                     print("Переключено на:", name)
+
+                # поиск записи
+                elif c == "9":
+                    table = self.db.get_table()
+                    print("Поиск (Enter = пропустить поле)")
+
+                    filters = {}
+
+                    for field in table.schema:
+                        value = input(f"{field}: ").strip()
+                        if value:
+                            filters[field] = value
+                    result = table.search(filters)
+                    for r in result:
+                        print(r)
 
                 # выход из программы 
                 elif c == "0":

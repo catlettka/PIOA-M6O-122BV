@@ -1,184 +1,182 @@
-import unittest
-
-from src.db.backend.memory import Database
+import pytest
+from src.db.backend.memory import Table, Database
 from src.db.backend.errors import (
-    TableAlreadyExistsError,
-    TableNotCreatedError,
     EmptyTableError,
     InvalidFieldError,
     ValidationError,
+    TableAlreadyExistsError,
+    TableNotCreatedError,
 )
 
+def make_table():
+    return Table("users", {"id": "int", "name": "str"})
 
-class TestMemory(unittest.TestCase):
+def test_insert_and_select():
+    t = make_table()
 
-    def setUp(self):
+    t.insert({"id": 1, "name": "A"})
+    t.insert({"id": 2, "name": "B"})
 
-        self.db = Database()
+    assert t.select() == [
+        {"id": 1, "name": "A"},
+        {"id": 2, "name": "B"},
+    ]
 
-        self.db.create_table("books", {
-            "title": "str",
-            "year": "int",
-            "pages": "int"
-        })
+def test_select_empty():
+    t = make_table()
 
-        self.table = self.db.get_table()
+    with pytest.raises(EmptyTableError):
+        t.select()
 
-    #  CREATE RECORD 
+def test_sort():
+    t = make_table()
 
-    def test_create_record(self):
+    t.insert({"id": 2, "name": "B"})
+    t.insert({"id": 1, "name": "A"})
 
-        cases = [
-            {"title": "Book1", "year": 2000, "pages": 100},
-            {"title": "Book2", "year": 2005, "pages": 200},
-            {"title": "Book3", "year": 2010, "pages": 300},
-            {"title": "Book4", "year": 2015, "pages": 400},
-        ]
+    result = t.sort("id", asc=True)
 
-        for case in cases:
-            with self.subTest(case=case):
-                self.table.insert(case)
-                self.assertIn(case, self.table.rows)
+    assert result[0]["id"] == 1
 
-    #  EMPTY TABLE 
+def test_sort_invalid_field():
+    t = make_table()
 
-    def test_empty_table_select(self):
+    with pytest.raises(InvalidFieldError):
+        t.sort("unknown")
 
-        db = Database()
-        db.create_table("books", {"a": "str"})
-        table = db.get_table()
+def test_search_all():
+    t = make_table()
 
-        with self.assertRaises(EmptyTableError):
-            table.select()
+    t.insert({"id": 1, "name": "A"})
 
-    #  SELECT / FILTER 
+    assert t.search() == [{"id": 1, "name": "A"}]
 
-    def test_select_and_filter(self):
+def test_search_filter():
+    t = make_table()
 
-        data = [
-            {"title": "A", "year": 2000, "pages": 100},
-            {"title": "B", "year": 2005, "pages": 200},
-            {"title": "C", "year": 2000, "pages": 300},
-        ]
+    t.insert({"id": 1, "name": "A"})
+    t.insert({"id": 2, "name": "B"})
 
-        for d in data:
-            self.table.insert(d)
+    result = t.search({"id": "1"})
 
-        cases = [
-            {
-                "name": "без фильтра",
-                "expected": data
-            },
-            {
-                "name": "по году",
-                "filter": {"year": 2000},
-                "expected": [data[0], data[2]]
-            },
-            {
-                "name": "по названию",
-                "filter": {"title": "B"},
-                "expected": [data[1]]
-            },
-        ]
+    assert result == [{"id": 1, "name": "A"}]
 
-        for case in cases:
+def test_search_empty_error():
+    t = make_table()
 
-            with self.subTest(name=case["name"]):
+    with pytest.raises(EmptyTableError):
+        t.search({"id": "1"})
 
-                if "filter" in case:
-                    result = [
-                        r for r in self.table.rows
-                        if all(str(r[k]) == str(v) for k, v in case["filter"].items())
-                    ]
-                else:
-                    result = self.table.rows
+def test_update():
+    t = make_table()
 
-                self.assertEqual(result, case["expected"])
+    t.insert({"id": 1, "name": "A"})
 
-    #  SORT 
+    count = t.update({"id": "1"}, {"name": "NEW"})
 
-    def test_sort(self):
+    assert count == 1
+    assert t.rows[0]["name"] == "NEW"
 
-        data = [
-            {"title": "A", "year": 2010},
-            {"title": "B", "year": 2000},
-            {"title": "C", "year": 2020},
-        ]
+def test_update_invalid_field():
+    t = make_table()
 
-        for d in data:
-            self.table.insert(d)
+    t.insert({"id": 1, "name": "A"})
 
-        result = self.table.sort("year", asc=True)
+    with pytest.raises(InvalidFieldError):
+        t.update({"id": "1"}, {"age": 10})
 
-        self.assertEqual(
-            [r["year"] for r in result],
-            [2000, 2010, 2020]
-        )
+def test_update_not_found():
+    t = make_table()
 
-    #  INVALID FIELD 
+    t.insert({"id": 1, "name": "A"})
 
-    def test_invalid_field_sort(self):
+    with pytest.raises(ValidationError):
+        t.update({"id": "999"}, {"name": "X"})
 
-        self.table.insert({"title": "A", "year": 2000})
+def test_delete_all():
+    t = make_table()
 
-        with self.assertRaises(InvalidFieldError):
-            self.table.sort("wrong_field")
+    t.insert({"id": 1})
+    t.insert({"id": 2})
 
-    #  UPDATE 
+    removed = t.delete({})
 
-    def test_update(self):
+    assert removed == 2
+    assert t.rows == []
 
-        self.table.insert({"title": "A", "year": 2000})
+def test_delete_filter():
+    t = make_table()
 
-        updated = self.table.update(
-            {"title": "A"},
-            {"year": 2025}
-        )
+    t.insert({"id": 1})
+    t.insert({"id": 2})
 
-        self.assertEqual(updated, 1)
-        self.assertEqual(self.table.rows[0]["year"], 2025)
+    removed = t.delete({"id": "1"})
 
-    def test_update_not_found(self):
+    assert removed == 1
+    assert len(t.rows) == 1
 
-        with self.assertRaises(ValidationError):
-            self.table.update({"title": "X"}, {"year": 999})
+def test_delete_not_found():
+    t = make_table()
 
-    # DELETE 
+    t.insert({"id": 1})
 
-    def test_delete(self):
+    with pytest.raises(ValidationError):
+        t.delete({"id": "999"})
 
-        self.table.insert({"title": "A"})
-        self.table.insert({"title": "B"})
+def test_create_table():
+    db = Database()
 
-        deleted = self.table.delete({"title": "A"})
+    db.create_table("users", {"id": "int"})
 
-        self.assertEqual(deleted, 1)
-        self.assertEqual(len(self.table.rows), 1)
+    assert "users" in db.tables
+    assert db.get_current_name() == "users"
 
-    def test_delete_all(self):
+def test_duplicate_table():
+    db = Database()
 
-        self.table.insert({"title": "A"})
-        self.table.insert({"title": "B"})
+    db.create_table("users", {"id": "int"})
 
-        deleted = self.table.delete({})
+    with pytest.raises(TableAlreadyExistsError):
+        db.create_table("users", {"id": "int"})
 
-        self.assertEqual(deleted, 2)
-        self.assertEqual(len(self.table.rows), 0)
+def test_switch_table():
+    db = Database()
 
-    #  MULTIPLE TABLES 
+    db.create_table("users", {"id": "int"})
+    db.create_table("posts", {"id": "int"})
 
-    def test_table_switch(self):
+    db.switch_table("users")
 
-        self.db.create_table("users", {"name": "str"})
-        self.db.switch_table("users")
+    assert db.get_current_name() == "users"
 
-        self.assertEqual(self.db.get_current_name(), "users")
+def test_switch_invalid():
+    db = Database()
 
-    def test_table_already_exists(self):
+    with pytest.raises(TableNotCreatedError):
+        db.switch_table("no_table")
 
-        with self.assertRaises(TableAlreadyExistsError):
-            self.db.create_table("books", {"x": "str"})
+def test_get_table():
+    db = Database()
 
+    db.create_table("users", {"id": "int"})
 
-if __name__ == "__main__":
-    unittest.main()
+    table = db.get_table()
+
+    assert isinstance(table, Table)
+
+def test_list_tables():
+    db = Database()
+
+    db.create_table("users", {})
+    db.create_table("posts", {})
+
+    tables = db.list_tables()
+
+    assert "users" in tables
+    assert "posts" in tables
+
+def test_list_tables_empty():
+    db = Database()
+
+    with pytest.raises(TableNotCreatedError):
+        db.list_tables()

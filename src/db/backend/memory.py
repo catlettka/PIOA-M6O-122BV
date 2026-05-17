@@ -38,6 +38,21 @@ class Table:
             reverse=not asc
         )
 
+    # поиск записей по фильтрам
+    def search(self, filters=None):
+        
+        if self.rows is None:
+            raise TableNotCreatedError()
+        if not self.rows:
+            raise EmptyTableError()
+        if not filters:
+            return self.rows
+        result = []
+        for r in self.rows:
+            if all(str(r.get(k)) == str(v) for k, v in filters.items()):
+                result.append(r)
+        return result
+
     # обновление записей по фильтру
     def update(self, filters, updates):
 
@@ -95,8 +110,13 @@ class Database:
     # создание новой таблицы
     def create_table(self, name, schema):
 
+        if not name or not name.strip():
+            raise EmptyFieldError()
         if name in self.tables:
             raise TableAlreadyExistsError(name)
+        for field in schema:
+            if not field or not field.strip():
+                raise EmptyFieldError()
 
         self.tables[name] = Table(name, schema)
         self.current = name
