@@ -1,182 +1,363 @@
-import pytest
+import unittest
+
 from src.db.backend.memory import Table, Database
 from src.db.backend.errors import (
-    EmptyTableError,
-    InvalidFieldError,
-    ValidationError,
-    TableAlreadyExistsError,
     TableNotCreatedError,
+    TableAlreadyExistsError,
+    EmptyTableError,
+    EmptyFieldError,
+    InvalidFieldError,
+    InvalidTypeError,
+    ValidationError,
+    InvalidSchemaError,
+    RecordNotFoundError,
 )
 
-def make_table():
-    return Table("users", {"id": "int", "name": "str"})
 
-def test_insert_and_select():
-    t = make_table()
+class TestTable(unittest.TestCase):
 
-    t.insert({"id": 1, "name": "A"})
-    t.insert({"id": 2, "name": "B"})
+    def setUp(self):
+        self.table = Table(
+            "students",
+            {
+                "id": "int",
+                "name": "str",
+                "score": "float",
+            },
+        )
 
-    assert t.select() == [
-        {"id": 1, "name": "A"},
-        {"id": 2, "name": "B"},
-    ]
+        self.assertIsInstance(self.table, Table)
 
-def test_select_empty():
-    t = make_table()
+    def test_validate_success(self):
 
-    with pytest.raises(EmptyTableError):
-        t.select()
+        cases = [
+            ("id", "1", 1),
+            ("id", 5, 5),
+            ("score", "4.5", 4.5),
+            ("name", "John", "John"),
+        ]
 
-def test_sort():
-    t = make_table()
+        for field, value, expected in cases:
+            with self.subTest(field=field, value=value):
+                result = self.table.validate(field, value)
+                self.assertEqual(result, expected)
 
-    t.insert({"id": 2, "name": "B"})
-    t.insert({"id": 1, "name": "A"})
+    def test_validate_invalid_field(self):
 
-    result = t.sort("id", asc=True)
+        with self.assertRaises(InvalidFieldError):
+            self.table.validate("age", 10)
 
-    assert result[0]["id"] == 1
+    def test_validate_empty(self):
 
-def test_sort_invalid_field():
-    t = make_table()
+        cases = [
+            ("id", ""),
+            ("name", None),
+        ]
 
-    with pytest.raises(InvalidFieldError):
-        t.sort("unknown")
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                with self.assertRaises(EmptyFieldError):
+                    self.table.validate(field, value)
 
-def test_search_all():
-    t = make_table()
+    def test_validate_invalid_type(self):
 
-    t.insert({"id": 1, "name": "A"})
+        cases = [
+            ("id", "abc"),
+            ("score", "text"),
+        ]
 
-    assert t.search() == [{"id": 1, "name": "A"}]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                with self.assertRaises(InvalidTypeError):
+                    self.table.validate(field, value)
 
-def test_search_filter():
-    t = make_table()
+    def test_validate_str_digits_only(self):
 
-    t.insert({"id": 1, "name": "A"})
-    t.insert({"id": 2, "name": "B"})
+        with self.assertRaises(InvalidTypeError):
+            self.table.validate("name", "12345")
 
-    result = t.search({"id": "1"})
+    def test_insert_success(self):
 
-    assert result == [{"id": 1, "name": "A"}]
+        record = {
+            "id": "1",
+            "name": "Alice",
+            "score": "5.5",
+        }
 
-def test_search_empty_error():
-    t = make_table()
+        self.table.insert(record)
 
-    with pytest.raises(EmptyTableError):
-        t.search({"id": "1"})
+        self.assertEqual(len(self.table.rows), 1)
 
-def test_update():
-    t = make_table()
+        self.assertEqual(
+            self.table.rows[0],
+            {
+                "id": 1,
+                "name": "Alice",
+                "score": 5.5,
+            },
+        )
 
-    t.insert({"id": 1, "name": "A"})
+    def test_insert_missing_field(self):
 
-    count = t.update({"id": "1"}, {"name": "NEW"})
+        record = {
+            "id": 1,
+            "name": "Bob",
+        }
 
-    assert count == 1
-    assert t.rows[0]["name"] == "NEW"
+        with self.assertRaises(ValidationError):
+            self.table.insert(record)
 
-def test_update_invalid_field():
-    t = make_table()
+    def test_select(self):
 
-    t.insert({"id": 1, "name": "A"})
+        self.table.insert(
+            {
+                "id": 1,
+                "name": "Tom",
+                "score": 4.0,
+            }
+        )
 
-    with pytest.raises(InvalidFieldError):
-        t.update({"id": "1"}, {"age": 10})
+        records = self.table.select()
 
-def test_update_not_found():
-    t = make_table()
+        self.assertEqual(len(records), 1)
 
-    t.insert({"id": 1, "name": "A"})
+    def test_sort_asc(self):
 
-    with pytest.raises(ValidationError):
-        t.update({"id": "999"}, {"name": "X"})
+        self.table.insert({"id": 2, "name": "B", "score": 8.0})
+        self.table.insert({"id": 1, "name": "A", "score": 5.0})
 
-def test_delete_all():
-    t = make_table()
+        result = self.table.sort("id")
 
-    t.insert({"id": 1})
-    t.insert({"id": 2})
+        self.assertEqual(result[0]["id"], 1)
 
-    removed = t.delete({})
+    def test_sort_desc(self):
 
-    assert removed == 2
-    assert t.rows == []
+        self.table.insert({"id": 2, "name": "B", "score": 8.0})
+        self.table.insert({"id": 1, "name": "A", "score": 5.0})
 
-def test_delete_filter():
-    t = make_table()
+        result = self.table.sort("id", asc=False)
 
-    t.insert({"id": 1})
-    t.insert({"id": 2})
+        self.assertEqual(result[0]["id"], 2)
 
-    removed = t.delete({"id": "1"})
+    def test_sort_empty(self):
 
-    assert removed == 1
-    assert len(t.rows) == 1
+        with self.assertRaises(EmptyTableError):
+            self.table.sort("id")
 
-def test_delete_not_found():
-    t = make_table()
+    def test_sort_invalid_field(self):
 
-    t.insert({"id": 1})
+        with self.assertRaises(InvalidFieldError):
+            self.table.sort("age")
 
-    with pytest.raises(ValidationError):
-        t.delete({"id": "999"})
+    def test_search_without_filters(self):
 
-def test_create_table():
-    db = Database()
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
 
-    db.create_table("users", {"id": "int"})
+        result = self.table.search()
 
-    assert "users" in db.tables
-    assert db.get_current_name() == "users"
+        self.assertEqual(len(result), 1)
 
-def test_duplicate_table():
-    db = Database()
+    def test_search_by_filter(self):
 
-    db.create_table("users", {"id": "int"})
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 7.0})
 
-    with pytest.raises(TableAlreadyExistsError):
-        db.create_table("users", {"id": "int"})
+        result = self.table.search({"id": 2})
 
-def test_switch_table():
-    db = Database()
+        self.assertEqual(result[0]["name"], "Bob")
 
-    db.create_table("users", {"id": "int"})
-    db.create_table("posts", {"id": "int"})
+    def test_search_not_found(self):
 
-    db.switch_table("users")
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
 
-    assert db.get_current_name() == "users"
+        with self.assertRaises(RecordNotFoundError):
+            self.table.search({"id": 999})
 
-def test_switch_invalid():
-    db = Database()
+    def test_search_invalid_field(self):
 
-    with pytest.raises(TableNotCreatedError):
-        db.switch_table("no_table")
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
 
-def test_get_table():
-    db = Database()
+        with self.assertRaises(InvalidFieldError):
+            self.table.search({"age": 10})
 
-    db.create_table("users", {"id": "int"})
+    def test_update_by_field(self):
 
-    table = db.get_table()
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 7.0})
 
-    assert isinstance(table, Table)
+        updated = self.table.update(
+            filters={"id": 1},
+            updates={"name": "Alex"},
+        )
 
-def test_list_tables():
-    db = Database()
+        self.assertEqual(updated, 1)
+        self.assertEqual(self.table.rows[0]["name"], "Alex")
 
-    db.create_table("users", {})
-    db.create_table("posts", {})
+    def test_update_by_value(self):
 
-    tables = db.list_tables()
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 5.0})
 
-    assert "users" in tables
-    assert "posts" in tables
+        updated = self.table.update(
+            value_filter="5.0",
+            updates={"name": "Updated"},
+        )
 
-def test_list_tables_empty():
-    db = Database()
+        self.assertEqual(updated, 2)
 
-    with pytest.raises(TableNotCreatedError):
-        db.list_tables()
+    def test_update_by_field_and_value(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 5.0})
+
+        updated = self.table.update(
+            filters={"id": 1},
+            value_filter="5.0",
+            updates={"name": "One"},
+        )
+
+        self.assertEqual(updated, 1)
+
+    def test_update_without_updates(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+
+        with self.assertRaises(ValidationError):
+            self.table.update(filters={"id": 1})
+
+    def test_update_not_found(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+
+        with self.assertRaises(RecordNotFoundError):
+            self.table.update(
+                filters={"id": 999},
+                updates={"name": "X"},
+            )
+
+    def test_delete_all(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 7.0})
+
+        deleted = self.table.delete()
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual(len(self.table.rows), 0)
+
+    def test_delete_by_field(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 7.0})
+
+        deleted = self.table.delete(filters={"id": 1})
+
+        self.assertEqual(deleted, 1)
+        self.assertEqual(len(self.table.rows), 1)
+
+    def test_delete_by_value(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+        self.table.insert({"id": 2, "name": "Bob", "score": 5.0})
+
+        deleted = self.table.delete(value_filter="5.0")
+
+        self.assertEqual(deleted, 2)
+
+    def test_delete_not_found(self):
+
+        self.table.insert({"id": 1, "name": "Tom", "score": 5.0})
+
+        with self.assertRaises(RecordNotFoundError):
+            self.table.delete(filters={"id": 999})
+
+
+class TestDatabase(unittest.TestCase):
+
+    def setUp(self):
+        self.db = Database()
+
+        self.assertIsInstance(self.db, Database)
+
+    def test_create_table(self):
+
+        schema = {
+            "id": "int",
+            "name": "str",
+        }
+
+        self.db.create_table("users", schema)
+
+        self.assertIn("users", self.db.tables)
+
+    def test_create_table_duplicate(self):
+
+        schema = {
+            "id": "int",
+        }
+
+        self.db.create_table("users", schema)
+
+        with self.assertRaises(TableAlreadyExistsError):
+            self.db.create_table("users", schema)
+
+    def test_create_table_empty_name(self):
+
+        with self.assertRaises(EmptyFieldError):
+            self.db.create_table("", {"id": "int"})
+
+    def test_create_table_invalid_schema(self):
+
+        with self.assertRaises(InvalidSchemaError):
+            self.db.create_table("users", {"": "int"})
+
+    def test_create_table_invalid_type(self):
+
+        with self.assertRaises(InvalidTypeError):
+            self.db.create_table("users", {"id": "bool"})
+
+    def test_switch_table(self):
+
+        self.db.create_table("users", {"id": "int"})
+
+        self.db.switch_table("users")
+
+        self.assertEqual(self.db.current, "users")
+
+    def test_switch_table_not_found(self):
+
+        with self.assertRaises(TableNotCreatedError):
+            self.db.switch_table("missing")
+
+    def test_get_current_name(self):
+
+        self.assertEqual(
+            self.db.get_current_name(),
+            "не выбрана",
+        )
+
+    def test_get_table(self):
+
+        self.db.create_table("users", {"id": "int"})
+
+        table = self.db.get_table()
+
+        self.assertIsInstance(table, Table)
+
+    def test_get_table_not_created(self):
+
+        with self.assertRaises(TableNotCreatedError):
+            self.db.get_table()
+
+    def test_list_tables(self):
+
+        self.db.create_table("users", {"id": "int"})
+
+        tables = self.db.list_tables()
+
+        self.assertEqual(tables, ["users"])
+
+    def test_list_tables_empty(self):
+
+        with self.assertRaises(TableNotCreatedError):
+            self.db.list_tables()

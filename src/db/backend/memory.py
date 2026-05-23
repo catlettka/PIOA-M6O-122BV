@@ -1,4 +1,14 @@
-from .errors import *
+from .errors import (
+    TableNotCreatedError,
+    TableAlreadyExistsError,
+    EmptyTableError,
+    EmptyFieldError,
+    InvalidFieldError,
+    InvalidTypeError,
+    ValidationError,
+    InvalidSchemaError,
+    RecordNotFoundError,
+)
 
 
 class Table:
@@ -8,22 +18,59 @@ class Table:
     - schema (структура таблицы)
     - rows (записи)
     """
+
+    ALLOWED_TYPES = {"int", "float", "str"}
+
     # инициализация таблицы
     def __init__(self, name, schema):
         self.name = name
         self.schema = schema
         self.rows = []
 
+    # единая валидация
+    def validate(self, field, value):
+
+        if field not in self.schema:
+            raise InvalidFieldError(field)
+
+        expected = self.schema[field]
+
+        if value == "" or value is None:
+            raise EmptyFieldError()
+
+        try:
+            if expected == "int":
+                return int(value)
+
+            if expected == "float":
+                return float(value)
+
+            if expected == "str":
+                if str(value).isdigit():
+                    raise InvalidTypeError(
+                        field, "строчка не может состоять только из цифр"
+                    )
+                return str(value)
+
+        except (ValueError, TypeError):
+            raise InvalidTypeError(field, expected)
+
     # добовление записи в таблицу
     def insert(self, record):
-        self.rows.append(record)
+
+        validated = {}
+
+        for field in self.schema:
+
+            if field not in record:
+                raise ValidationError(f"Нет поля '{field}'")
+
+            validated[field] = self.validate(field, record[field])
+
+        self.rows.append(validated)
 
     # получение всех записей таблицы
     def select(self):
-
-        if not self.rows:
-            raise EmptyTableError()
-
         return self.rows
 
     # сортировка записей по указанному полю
@@ -32,69 +79,144 @@ class Table:
         if field not in self.schema:
             raise InvalidFieldError(field)
 
-        return sorted(
-            self.rows,
-            key=lambda x: x[field],
-            reverse=not asc
-        )
+        if not self.rows:
+            raise EmptyTableError()
+
+        return sorted(self.rows, key=lambda x: x[field], reverse=not asc)
 
     # поиск записей по фильтрам
     def search(self, filters=None):
-        
-        if self.rows is None:
-            raise TableNotCreatedError()
+
         if not self.rows:
             raise EmptyTableError()
+
         if not filters:
             return self.rows
+
         result = []
-        for r in self.rows:
-            if all(str(r.get(k)) == str(v) for k, v in filters.items()):
-                result.append(r)
+
+        for row in self.rows:
+
+            ok = True
+
+            for k, v in filters.items():
+
+                if k not in self.schema:
+                    raise InvalidFieldError(k)
+
+                if row.get(k) != self.validate(k, v):
+                    ok = False
+                    break
+
+            if ok:
+                result.append(row)
+
+        if not result:
+            raise RecordNotFoundError()
+
         return result
 
     # обновление записей по фильтру
-    def update(self, filters, updates):
+    def update(self, filters=None, value_filter=None, updates=None):
+
+        if not self.rows:
+            raise EmptyTableError()
+
+        if not updates:
+            raise ValidationError("Нет данных для обновления")
+
+        validated_updates = {k: self.validate(k, v) for k, v in updates.items()}
 
         count = 0
 
-        for r in self.rows:
+        for row in self.rows:
 
-            if all(str(r.get(k)) == str(v) for k, v in filters.items()):
+            matched = True
 
-                for k, v in updates.items():
+            if filters:
+                for k, v in filters.items():
 
                     if k not in self.schema:
                         raise InvalidFieldError(k)
 
-                    r[k] = v
+                    if row.get(k) != self.validate(k, v):
+                        matched = False
+                        break
 
+            if matched and value_filter is not None:
+
+                found = False
+
+                for v in row.values():
+                    if str(v) == str(value_filter):
+                        found = True
+                        break
+
+                if not found:
+                    matched = False
+
+            if matched:
+                row.update(validated_updates)
                 count += 1
 
         if count == 0:
-            raise ValidationError("Записи не найдены")
+            raise RecordNotFoundError()
 
         return count
 
     # удаление записей по фильтру
-    def delete(self, filters):
+    def delete(self, filters=None, value_filter=None):
 
-        if not filters:
-            before = len(self.rows)
+        if not self.rows:
+            raise EmptyTableError()
+
+        # удалить всё
+        if not filters and value_filter is None:
+            count = len(self.rows)
             self.rows.clear()
-            return before
+            return count
 
         before = len(self.rows)
 
-        self.rows = [
-            r for r in self.rows
-            if not all(str(r.get(k)) == str(v) for k, v in filters.items())
-        ]
+        new_rows = []
 
-        if before == len(self.rows):
-            raise ValidationError("Записи не найдены")
+        for row in self.rows:
 
-        return before - len(self.rows)
+            matched = True
+
+            if filters:
+                for k, v in filters.items():
+
+                    if k not in self.schema:
+                        raise InvalidFieldError(k)
+
+                    if row.get(k) != self.validate(k, v):
+                        matched = False
+                        break
+
+            if matched and value_filter is not None:
+
+                found = False
+
+                for v in row.values():
+                    if str(v) == str(value_filter):
+                        found = True
+                        break
+
+                if not found:
+                    matched = False
+
+            if not matched:
+                new_rows.append(row)
+
+        self.rows = new_rows
+
+        deleted = before - len(self.rows)
+
+        if deleted == 0:
+            raise RecordNotFoundError()
+
+        return deleted
 
 
 class Database:
@@ -112,13 +234,27 @@ class Database:
 
         if not name or not name.strip():
             raise EmptyFieldError()
+
+        name = name.strip()
+
         if name in self.tables:
             raise TableAlreadyExistsError(name)
-        for field in schema:
-            if not field or not field.strip():
-                raise EmptyFieldError()
 
-        self.tables[name] = Table(name, schema)
+        validated_schema = {}
+
+        for field, field_type in schema.items():
+
+            if not field or not field.strip():
+                raise InvalidSchemaError(field)
+
+            field = field.strip()
+
+            if field_type not in Table.ALLOWED_TYPES:
+                raise InvalidTypeError(field, "int/float/str")
+
+            validated_schema[field] = field_type
+
+        self.tables[name] = Table(name, validated_schema)
         self.current = name
 
     # переключение на другую таблицу
@@ -140,6 +276,7 @@ class Database:
             raise TableNotCreatedError()
 
         return self.tables[self.current]
+
     # список всех созданных таблиц
     def list_tables(self):
 

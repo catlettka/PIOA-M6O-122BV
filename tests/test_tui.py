@@ -1,181 +1,212 @@
-import pytest
-from unittest.mock import MagicMock, patch
+import unittest
+from unittest.mock import patch
+from io import StringIO
+
 from src.db.tui import TUI
-from src.db.backend.errors import DatabaseError
 
 
-def make_tui():
-    tui = TUI()
-    tui.db = MagicMock()
-    return tui
-    
-def test_create_table():
-    tui = make_tui()
+class TestTUI(unittest.TestCase):
 
-    with patch("builtins.input", side_effect=[
-        "1",
-        "users",
-        "2",
-        "id", "int",
-        "name", "str",
-        "0"
-    ]), patch("builtins.print"):
+    def setUp(self):
+        self.tui = TUI()
 
-        tui.run()
+    def test_create_table(self):
 
-        tui.db.create_table.assert_called_once()
+        inputs = [
+            "1",  # меню
+            "students",  # имя таблицы
+            "3",  # количество полей
+            "id",
+            "int",
+            "name",
+            "str",
+            "age",
+            "int",
+            "0",  # выход
+        ]
 
-def test_insert():
-    tui = make_tui()
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+                self.tui.run()
 
-    table = MagicMock()
-    table.schema = {"id": "int", "name": "str"}
-    tui.db.get_table.return_value = table
+                output = fake_out.getvalue()
 
-    with patch("builtins.input", side_effect=[
-        "2",
-        "1", "test",
-        "0"
-    ]), patch("builtins.print"):
+                self.assertIn("Создано.", output)
+                self.assertIn("students", self.tui.db.tables)
 
-        tui.run()
+    def test_insert_record(self):
 
-        table.insert.assert_called_once()
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
 
-def test_show():
-    tui = make_tui()
+        inputs = ["2", "1", "Alex", "20", "0"]
 
-    table = MagicMock()
-    table.select.return_value = [{"id": 1}]
-    tui.db.get_table.return_value = table
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
 
-    with patch("builtins.input", side_effect=["3", "0"]), \
-         patch("builtins.print"):
+                self.tui.run()
 
-        tui.run()
+                output = fake_out.getvalue()
 
-        table.select.assert_called()
+                self.assertIn("Запись добавлена.", output)
 
-def test_update():
-    tui = make_tui()
+                rows = self.tui.db.get_table().rows
 
-    table = MagicMock()
-    table.schema = {"name": "str"}
-    table.update.return_value = 1
-    tui.db.get_table.return_value = table
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["name"], "Alex")
 
-    with patch("builtins.input", side_effect=[
-        "4",
-        "", "",
-        "name",
-        "new",
-        "0"
-    ]), patch("builtins.print"):
+    def test_show_records(self):
 
-        tui.run()
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
 
-        table.update.assert_called()
+        self.tui.db.get_table().insert({"id": 1, "name": "Alex", "age": 20})
 
-def test_delete_yes():
-    tui = make_tui()
+        inputs = ["3", "0"]
 
-    table = MagicMock()
-    table.delete.return_value = 2
-    tui.db.get_table.return_value = table
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
 
-    with patch("builtins.input", side_effect=[
-        "5",
-        "", "",
-        "yes",
-        "0"
-    ]), patch("builtins.print"):
+                self.tui.run()
 
-        tui.run()
+                output = fake_out.getvalue()
 
-        table.delete.assert_called()
+                self.assertIn("Alex", output)
 
-def test_delete_cancel():
-    tui = make_tui()
+    def test_update_record(self):
 
-    table = MagicMock()
-    tui.db.get_table.return_value = table
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
 
-    with patch("builtins.input", side_effect=[
-        "5",
-        "", "",
-        "no",
-        "0"
-    ]), patch("builtins.print"):
+        table = self.tui.db.get_table()
 
-        tui.run()
+        table.insert({"id": 1, "name": "Alex", "age": 20})
 
-        table.delete.assert_not_called()
+        inputs = ["4", "id", "1", "", "name", "Max", "0"]
 
-def test_list_tables():
-    tui = make_tui()
-    tui.db.list_tables.return_value = ["users"]
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
 
-    with patch("builtins.input", side_effect=["6", "0"]), \
-         patch("builtins.print") as p:
+                self.tui.run()
 
-        tui.run()
+                output = fake_out.getvalue()
 
-        assert any("users" in str(x) for x in p.call_args_list)
+                self.assertIn("Обновлено:", output)
+                self.assertEqual(table.rows[0]["name"], "Max")
 
-def test_sort():
-    tui = make_tui()
+    def test_delete_record(self):
 
-    table = MagicMock()
-    table.sort.return_value = [{"id": 1}]
-    tui.db.get_table.return_value = table
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
 
-    with patch("builtins.input", side_effect=[
-        "7",
-        "id",
-        "",
-        "0"
-    ]), patch("builtins.print"):
+        table = self.tui.db.get_table()
 
-        tui.run()
+        table.insert({"id": 1, "name": "Alex", "age": 20})
 
-        table.sort.assert_called()
+        inputs = ["5", "id", "1", "", "0"]
 
-def test_switch():
-    tui = make_tui()
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
 
-    with patch("builtins.input", side_effect=[
-        "8",
-        "users",
-        "0"
-    ]), patch("builtins.print"):
+                self.tui.run()
 
-        tui.run()
+                output = fake_out.getvalue()
 
-        tui.db.switch_table.assert_called_with("users")
+                self.assertIn("Удалено:", output)
+                self.assertEqual(len(table.rows), 0)
 
-def test_search():
-    tui = make_tui()
+    def test_list_tables(self):
 
-    table = MagicMock()
-    table.schema = {"id": "int"}
-    table.search.return_value = [{"id": 1}]
-    tui.db.get_table.return_value = table
+        self.tui.db.create_table("students", {"id": "int"})
 
-    with patch("builtins.input", side_effect=[
-        "9",
-        "1",
-        "0"
-    ]), patch("builtins.print"):
+        inputs = ["6", "0"]
 
-        tui.run()
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
 
-        table.search.assert_called()
+                self.tui.run()
 
-def test_db_error():
-    tui = make_tui()
-    tui.db.get_table.side_effect = DatabaseError("fail")
+                output = fake_out.getvalue()
 
-    with patch("builtins.input", side_effect=["3", "0"]), \
-         patch("builtins.print"):
+                self.assertIn("students", output)
 
-        tui.run()
+    def test_switch_table(self):
+
+        self.tui.db.create_table("table1", {"id": "int"})
+
+        self.tui.db.create_table("table2", {"id": "int"})
+
+        inputs = ["8", "table1", "0"]
+
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+
+                self.tui.run()
+
+                output = fake_out.getvalue()
+
+                self.assertIn("Переключено на:", output)
+                self.assertEqual(self.tui.db.get_current_name(), "table1")
+
+    def test_search_records(self):
+
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
+
+        table = self.tui.db.get_table()
+
+        table.insert({"id": 1, "name": "Alex", "age": 20})
+
+        inputs = ["9", "", "Alex", "", "0"]
+
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+
+                self.tui.run()
+
+                output = fake_out.getvalue()
+
+                self.assertIn("Alex", output)
+
+    def test_sort_records(self):
+
+        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
+
+        table = self.tui.db.get_table()
+
+        table.insert({"id": 2, "name": "Bob", "age": 30})
+
+        table.insert({"id": 1, "name": "Alex", "age": 20})
+
+        inputs = ["7", "id", "asc", "0"]
+
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+
+                self.tui.run()
+
+                output = fake_out.getvalue()
+
+                self.assertIn("Alex", output)
+                self.assertIn("Bob", output)
+
+    def test_value_error(self):
+
+        inputs = ["1", "students", "abc", "0"]
+
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+
+                self.tui.run()
+
+                output = fake_out.getvalue()
+
+                self.assertIn("Ошибка ввода числа", output)
+
+    def test_database_error(self):
+
+        inputs = ["3", "0"]
+
+        with patch("builtins.input", side_effect=inputs):
+            with patch("sys.stdout", new=StringIO()) as fake_out:
+
+                self.tui.run()
+
+                output = fake_out.getvalue()
+
+                self.assertIn("Ошибка:", output)

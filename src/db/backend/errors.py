@@ -14,7 +14,7 @@ class TableAlreadyExistsError(DatabaseError):
 
 class EmptyTableError(DatabaseError):
     def __init__(self):
-        super().__init__("Таблица пока что пустая.")
+        super().__init__("Таблица пустая.")
 
 
 class EmptyFieldError(DatabaseError):
@@ -36,6 +36,12 @@ class ValidationError(DatabaseError):
     def __init__(self, msg="Ошибка валидации"):
         super().__init__(msg)
 
+
 class InvalidSchemaError(DatabaseError):
     def __init__(self, field):
         super().__init__(f"Некорректное имя поля: '{field}'")
+
+
+class RecordNotFoundError(DatabaseError):
+    def __init__(self):
+        super().__init__("Записи не найдены.")

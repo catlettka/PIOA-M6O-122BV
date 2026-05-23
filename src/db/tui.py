@@ -1,5 +1,5 @@
 from .backend.memory import Database
-from .backend.errors import *
+from .backend.errors import DatabaseError
 
 
 class TUI:
@@ -21,13 +21,12 @@ class TUI:
             print("6. Список таблиц")
             print("7. Сортировка")
             print("8. Переключить таблицу")
-            print("9. Поиск записи")
+            print("9. Поиск")
             print("0. Выход")
 
-            c = input(">>> ")
+            c = input(">>> ").strip()
 
             try:
-
                 # создает новую таблицу
                 if c == "1":
 
@@ -42,6 +41,7 @@ class TUI:
                         schema[f] = t
 
                     self.db.create_table(name, schema)
+                    print("Создано.")
 
                 # добавление новой записи в базу данных
                 elif c == "2":
@@ -49,35 +49,18 @@ class TUI:
                     table = self.db.get_table()
                     record = {}
 
-                    for field, ttype in table.schema.items():
+                    print("\nДобавление:")
+
+                    for field, ftype in table.schema.items():
 
                         while True:
-
-                            value = input(f"{field} ({ttype}): ").strip()
-
-                            if value == "":
-                                print("Ошибка: поле не может быть пустым.")
-                                continue
+                            value = input(f"{field} [{ftype}]: ")
 
                             try:
-
-                                if ttype == "int":
-                                    value = int(value)
-
-                                elif ttype == "float":
-                                    value = float(value)
-
-                                else:
-                                    if value.replace("-", "").replace(".", "").isdigit():
-                                        print("Ошибка: строка не может быть числом.")
-                                        continue
-                                    value = str(value)
-
-                                record[field] = value
+                                record[field] = table.validate(field, value)
                                 break
-
-                            except:
-                                print(f"Ошибка типа поля '{field}'")
+                            except DatabaseError as e:
+                                print(e)
 
                     table.insert(record)
                     print("Запись добавлена.")
@@ -95,60 +78,66 @@ class TUI:
 
                     table = self.db.get_table()
 
-                    fk = input("Фильтр поле (Enter = пропустить): ").strip()
-                    fv = input("Значение (Enter = пропустить): ").strip()
+                    print("\n=== ОБНОВЛЕНИЕ ===")
+
+                    fk = input(
+                        "Фильтр поле по полю(Enter = пропустить, перейти к фильтру по значению): "
+                    ).strip()
+                    fv = input(
+                        "Значение поля(Enter = пропустить, перейти к фильтру по значению): "
+                    ).strip()
+
+                    val = input(
+                        "Фильтр по значению (Enter = пропустить, если был использован фильтр по полю): "
+                    ).strip()
+
+                    uk = input("Поле изменения: ").strip()
+                    uv = input("Новое значение: ").strip()
+
+                    # ФИЛЬТР ПО ПОЛЯМ
+                    filters = {}
+                    if fk and fv:
+                        filters[fk] = fv
+
+                    value_filter = val if val != "" else None
+
+                    updated = table.update(
+                        filters=filters if filters else None,
+                        value_filter=value_filter,
+                        updates={uk: uv},
+                    )
+
+                    print("Обновлено:", updated)
+
+                # удаления записи
+                elif c == "5":
+
+                    table = self.db.get_table()
+
+                    print("\n=== УДАЛЕНИЕ ===")
+
+                    fk = input(
+                        "Фильтр поле (Enter = пропустить, перейти к удалению по значению): "
+                    ).strip()
+                    fv = input(
+                        "Значение поля(Enter = пропустить, перейти к удалению по значению): "
+                    ).strip()
+
+                    val = input(
+                        "Удалить по значению(Enter = пропустить, если было использовано удаление по полю): "
+                    ).strip()
 
                     filters = {}
                     if fk and fv:
                         filters[fk] = fv
 
-                    uk = input("Поле изменения: ").strip()
+                    value_filter = val if val != "" else None
 
-                    if uk not in table.schema:
-                        print("Ошибка: поле не существует")
-                        continue
+                    deleted = table.delete(
+                        filters=filters if filters else None, value_filter=value_filter
+                    )
 
-                    uv = input(f"Новое значение ({table.schema[uk]}): ").strip()
-
-                    if uv == "":
-                        print("Ошибка: значение не может быть пустым")
-                        continue
-
-                    try:
-
-                        if table.schema[uk] == "int":
-                            uv = int(uv)
-                        elif table.schema[uk] == "float":
-                            uv = float(uv)
-                        else:
-                            uv = str(uv)
-
-                    except:
-                        print("Ошибка типа данных")
-                        continue
-
-                    print("Обновлено:", table.update(filters, {uk: uv}))
-
-                # удаления записи 
-                elif c == "5":
-
-                    table = self.db.get_table()
-
-                    k = input("Поле (Enter = пропустить): ").strip()
-                    v = input("Значение (Enter = пропустить): ").strip()
-
-                    filters = {}
-
-                    if k and v:
-                        filters[k] = v
-
-                    if not filters:
-                        confirm = input("Удалить ВСЕ записи? (yes/no): ").strip().lower()
-                        if confirm != "yes":
-                            print("Отмена")
-                            continue
-
-                    print("Удалено:", table.delete(filters))
+                    print("Удалено:", deleted)
 
                 # отображение всех таблиц
                 elif c == "6":
@@ -159,8 +148,10 @@ class TUI:
 
                     table = self.db.get_table()
 
-                    f = input("Поле сортировки: ").strip()
-                    o = input("asc/desc(по возрастанию/по убыванию) (Enter = asc): ").strip()
+                    f = input("Поле сортировки: ")
+                    o = input(
+                        "asc/desc(по возрастанию/по убыванию) (Enter = asc): "
+                    ).strip()
 
                     asc = o != "desc"
 
@@ -170,26 +161,27 @@ class TUI:
                 # переключение таблицы
                 elif c == "8":
 
-                    name = input("Имя таблицы: ").strip()
+                    name = input("Имя таблицы: ")
                     self.db.switch_table(name)
                     print("Переключено на:", name)
 
                 # поиск записи
                 elif c == "9":
+
                     table = self.db.get_table()
                     print("Поиск (Enter = пропустить поле)")
 
                     filters = {}
 
                     for field in table.schema:
-                        value = input(f"{field}: ").strip()
-                        if value:
-                            filters[field] = value
-                    result = table.search(filters)
-                    for r in result:
+                        v = input(f"{field}: ")
+                        if v:
+                            filters[field] = v
+
+                    for r in table.search(filters):
                         print(r)
 
-                # выход из программы 
+                # выход из программы
                 elif c == "0":
                     print("Выход")
                     break
@@ -197,5 +189,5 @@ class TUI:
             except DatabaseError as e:
                 print("Ошибка:", e)
 
-            except Exception:
-                print("Ошибка: неверный ввод")
+            except ValueError:
+                print("Ошибка ввода числа")
