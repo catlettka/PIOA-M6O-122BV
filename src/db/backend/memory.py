@@ -21,15 +21,12 @@ class Table:
 
     ALLOWED_TYPES = {"int", "float", "str"}
 
-    # инициализация таблицы
     def __init__(self, name, schema):
         self.name = name
         self.schema = schema
         self.rows = []
 
-    # единая валидация
     def validate(self, field, value):
-
         if field not in self.schema:
             raise InvalidFieldError(field)
 
@@ -55,13 +52,12 @@ class Table:
         except (ValueError, TypeError):
             raise InvalidTypeError(field, expected)
 
-    # добовление записи в таблицу
-    def insert(self, record):
+        raise InvalidTypeError(field, "int/float/str")
 
+    def insert(self, record):
         validated = {}
 
         for field in self.schema:
-
             if field not in record:
                 raise ValidationError(f"Нет поля '{field}'")
 
@@ -69,38 +65,31 @@ class Table:
 
         self.rows.append(validated)
 
-    # получение всех записей таблицы
     def select(self):
-        return self.rows
+        return [row.copy() for row in self.rows]
 
-    # сортировка записей по указанному полю
     def sort(self, field, asc=True):
-
         if field not in self.schema:
             raise InvalidFieldError(field)
 
         if not self.rows:
             raise EmptyTableError()
 
-        return sorted(self.rows, key=lambda x: x[field], reverse=not asc)
+        return sorted(self.select(), key=lambda x: x[field], reverse=not asc)
 
-    # поиск записей по фильтрам
     def search(self, filters=None):
-
         if not self.rows:
             raise EmptyTableError()
 
         if not filters:
-            return self.rows
+            return self.select()
 
         result = []
 
         for row in self.rows:
-
             ok = True
 
             for k, v in filters.items():
-
                 if k not in self.schema:
                     raise InvalidFieldError(k)
 
@@ -109,16 +98,14 @@ class Table:
                     break
 
             if ok:
-                result.append(row)
+                result.append(row.copy())
 
         if not result:
             raise RecordNotFoundError()
 
         return result
 
-    # обновление записей по фильтру
     def update(self, filters=None, value_filter=None, updates=None):
-
         if not self.rows:
             raise EmptyTableError()
 
@@ -126,16 +113,13 @@ class Table:
             raise ValidationError("Нет данных для обновления")
 
         validated_updates = {k: self.validate(k, v) for k, v in updates.items()}
-
         count = 0
 
         for row in self.rows:
-
             matched = True
 
             if filters:
                 for k, v in filters.items():
-
                     if k not in self.schema:
                         raise InvalidFieldError(k)
 
@@ -144,14 +128,7 @@ class Table:
                         break
 
             if matched and value_filter is not None:
-
-                found = False
-
-                for v in row.values():
-                    if str(v) == str(value_filter):
-                        found = True
-                        break
-
+                found = any(str(v) == str(value_filter) for v in row.values())
                 if not found:
                     matched = False
 
@@ -164,29 +141,23 @@ class Table:
 
         return count
 
-    # удаление записей по фильтру
     def delete(self, filters=None, value_filter=None):
-
         if not self.rows:
             raise EmptyTableError()
 
-        # удалить всё
         if not filters and value_filter is None:
             count = len(self.rows)
             self.rows.clear()
             return count
 
         before = len(self.rows)
-
         new_rows = []
 
         for row in self.rows:
-
             matched = True
 
             if filters:
                 for k, v in filters.items():
-
                     if k not in self.schema:
                         raise InvalidFieldError(k)
 
@@ -195,14 +166,7 @@ class Table:
                         break
 
             if matched and value_filter is not None:
-
-                found = False
-
-                for v in row.values():
-                    if str(v) == str(value_filter):
-                        found = True
-                        break
-
+                found = any(str(v) == str(value_filter) for v in row.values())
                 if not found:
                     matched = False
 
@@ -210,7 +174,6 @@ class Table:
                 new_rows.append(row)
 
         self.rows = new_rows
-
         deleted = before - len(self.rows)
 
         if deleted == 0:
@@ -221,17 +184,15 @@ class Table:
 
 class Database:
     """
-    Класс Database — управляет всеми таблицами.
+    In-memory база данных. Данные живут только до завершения программы.
+    Файловые реализации наследуются от этого класса и используют тот же интерфейс.
     """
 
-    # создание пустой базы данных
     def __init__(self):
         self.tables = {}
         self.current = None
 
-    # создание новой таблицы
     def create_table(self, name, schema):
-
         if not name or not name.strip():
             raise EmptyFieldError()
 
@@ -243,11 +204,11 @@ class Database:
         validated_schema = {}
 
         for field, field_type in schema.items():
-
             if not field or not field.strip():
                 raise InvalidSchemaError(field)
 
             field = field.strip()
+            field_type = field_type.strip()
 
             if field_type not in Table.ALLOWED_TYPES:
                 raise InvalidTypeError(field, "int/float/str")
@@ -257,30 +218,33 @@ class Database:
         self.tables[name] = Table(name, validated_schema)
         self.current = name
 
-    # переключение на другую таблицу
     def switch_table(self, name):
+        name = name.strip()
 
         if name not in self.tables:
             raise TableNotCreatedError()
 
         self.current = name
 
-    # возвращает имя текущей таблицы
     def get_current_name(self):
         return self.current or "не выбрана"
 
-    # получение текущей таблицы
     def get_table(self):
-
         if not self.tables or self.current is None:
             raise TableNotCreatedError()
 
         return self.tables[self.current]
 
-    # список всех созданных таблиц
     def list_tables(self):
-
         if not self.tables:
             raise TableNotCreatedError()
 
         return list(self.tables.keys())
+
+    def save_current(self):
+        """Для in-memory реализации сохранение не требуется."""
+        return None
+
+    def save_all(self):
+        """Для in-memory реализации сохранение не требуется."""
+        return None

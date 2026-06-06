@@ -1,16 +1,27 @@
-from .backend.memory import Database
 from .backend.errors import DatabaseError
+from .backend.file_csv import CsvFileDatabase
+from .backend.file_json import JsonFileDatabase
+from .backend.memory import Database
 
 
 class TUI:
-
     def __init__(self):
-        self.db = Database()
+        print("Выберите тип базы данных:")
+        print("1. In-memory")
+        print("2. JSON file database")
+        print("3. CSV file database")
+
+        choice = input(">>> ").strip()
+
+        if choice == "2":
+            self.db = JsonFileDatabase()
+        elif choice == "3":
+            self.db = CsvFileDatabase()
+        else:
+            self.db = Database()
 
     def run(self):
-
         while True:
-
             print("\n=== МЕНЮ ===")
             print("Текущая таблица:", self.db.get_current_name())
             print("1. Создать таблицу")
@@ -27,12 +38,9 @@ class TUI:
             c = input(">>> ").strip()
 
             try:
-                # создает новую таблицу
                 if c == "1":
-
                     name = input("Имя таблицы: ").strip()
                     n = int(input("Количество полей: "))
-
                     schema = {}
 
                     for _ in range(n):
@@ -43,16 +51,12 @@ class TUI:
                     self.db.create_table(name, schema)
                     print("Создано.")
 
-                # добавление новой записи в базу данных
                 elif c == "2":
-
                     table = self.db.get_table()
                     record = {}
-
                     print("\nДобавление:")
 
                     for field, ftype in table.schema.items():
-
                         while True:
                             value = input(f"{field} [{ftype}]: ")
 
@@ -63,114 +67,78 @@ class TUI:
                                 print(e)
 
                     table.insert(record)
+                    self.db.save_current()
                     print("Запись добавлена.")
 
-                # вывод списка записей
                 elif c == "3":
-
                     table = self.db.get_table()
 
                     for r in table.select():
                         print(r)
 
-                # обновления поля существующей записи по идентификатору или фильтру
                 elif c == "4":
-
                     table = self.db.get_table()
-
                     print("\n=== ОБНОВЛЕНИЕ ===")
 
-                    fk = input(
-                        "Фильтр поле по полю(Enter = пропустить, перейти к фильтру по значению): "
-                    ).strip()
-                    fv = input(
-                        "Значение поля(Enter = пропустить, перейти к фильтру по значению): "
-                    ).strip()
-
-                    val = input(
-                        "Фильтр по значению (Enter = пропустить, если был использован фильтр по полю): "
-                    ).strip()
-
+                    fk = input("Фильтр поле по полю (Enter = пропустить): ").strip()
+                    fv = input("Значение поля (Enter = пропустить): ").strip()
+                    val = input("Фильтр по значению (Enter = пропустить): ").strip()
                     uk = input("Поле изменения: ").strip()
                     uv = input("Новое значение: ").strip()
 
-                    # ФИЛЬТР ПО ПОЛЯМ
                     filters = {}
                     if fk and fv:
                         filters[fk] = fv
 
                     value_filter = val if val != "" else None
-
                     updated = table.update(
                         filters=filters if filters else None,
                         value_filter=value_filter,
                         updates={uk: uv},
                     )
-
+                    self.db.save_current()
                     print("Обновлено:", updated)
 
-                # удаления записи
                 elif c == "5":
-
                     table = self.db.get_table()
-
                     print("\n=== УДАЛЕНИЕ ===")
 
-                    fk = input(
-                        "Фильтр поле (Enter = пропустить, перейти к удалению по значению): "
-                    ).strip()
-                    fv = input(
-                        "Значение поля(Enter = пропустить, перейти к удалению по значению): "
-                    ).strip()
-
-                    val = input(
-                        "Удалить по значению(Enter = пропустить, если было использовано удаление по полю): "
-                    ).strip()
+                    fk = input("Фильтр поле (Enter = пропустить): ").strip()
+                    fv = input("Значение поля (Enter = пропустить): ").strip()
+                    val = input("Удалить по значению (Enter = пропустить): ").strip()
 
                     filters = {}
                     if fk and fv:
                         filters[fk] = fv
 
                     value_filter = val if val != "" else None
-
                     deleted = table.delete(
-                        filters=filters if filters else None, value_filter=value_filter
+                        filters=filters if filters else None,
+                        value_filter=value_filter,
                     )
-
+                    self.db.save_current()
                     print("Удалено:", deleted)
 
-                # отображение всех таблиц
                 elif c == "6":
                     print(self.db.list_tables())
 
-                # сортировка таблицы
                 elif c == "7":
-
                     table = self.db.get_table()
-
-                    f = input("Поле сортировки: ")
-                    o = input(
-                        "asc/desc(по возрастанию/по убыванию) (Enter = asc): "
-                    ).strip()
-
+                    f = input("Поле сортировки: ").strip()
+                    o = input("asc/desc (Enter = asc): ").strip()
                     asc = o != "desc"
 
                     for r in table.sort(f, asc):
                         print(r)
 
-                # переключение таблицы
                 elif c == "8":
-
-                    name = input("Имя таблицы: ")
+                    name = input("Имя таблицы: ").strip()
                     self.db.switch_table(name)
                     print("Переключено на:", name)
 
-                # поиск записи
                 elif c == "9":
-
                     table = self.db.get_table()
                     print("Поиск (Enter = пропустить поле)")
-
                     filters = {}
 
                     for field in table.schema:
@@ -181,8 +149,8 @@ class TUI:
                     for r in table.search(filters):
                         print(r)
 
-                # выход из программы
                 elif c == "0":
+                    self.db.save_all()
                     print("Выход")
                     break
 

@@ -1,212 +1,281 @@
+import io
 import unittest
 from unittest.mock import patch
-from io import StringIO
-
+from src.db.backend.memory import Database
 from src.db.tui import TUI
 
 
 class TestTUI(unittest.TestCase):
-
-    def setUp(self):
-        self.tui = TUI()
-
-    def test_create_table(self):
-
-        inputs = [
-            "1",  # меню
-            "students",  # имя таблицы
-            "3",  # количество полей
-            "id",
-            "int",
-            "name",
-            "str",
-            "age",
-            "int",
-            "0",  # выход
-        ]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Создано.", output)
-                self.assertIn("students", self.tui.db.tables)
-
-    def test_insert_record(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        inputs = ["2", "1", "Alex", "20", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Запись добавлена.", output)
-
-                rows = self.tui.db.get_table().rows
-
-                self.assertEqual(len(rows), 1)
-                self.assertEqual(rows[0]["name"], "Alex")
-
-    def test_show_records(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        self.tui.db.get_table().insert({"id": 1, "name": "Alex", "age": 20})
-
-        inputs = ["3", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Alex", output)
-
-    def test_update_record(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        table = self.tui.db.get_table()
-
-        table.insert({"id": 1, "name": "Alex", "age": 20})
-
-        inputs = ["4", "id", "1", "", "name", "Max", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Обновлено:", output)
-                self.assertEqual(table.rows[0]["name"], "Max")
-
-    def test_delete_record(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        table = self.tui.db.get_table()
-
-        table.insert({"id": 1, "name": "Alex", "age": 20})
-
-        inputs = ["5", "id", "1", "", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Удалено:", output)
-                self.assertEqual(len(table.rows), 0)
-
-    def test_list_tables(self):
-
-        self.tui.db.create_table("students", {"id": "int"})
-
-        inputs = ["6", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("students", output)
-
-    def test_switch_table(self):
-
-        self.tui.db.create_table("table1", {"id": "int"})
-
-        self.tui.db.create_table("table2", {"id": "int"})
-
-        inputs = ["8", "table1", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Переключено на:", output)
-                self.assertEqual(self.tui.db.get_current_name(), "table1")
-
-    def test_search_records(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        table = self.tui.db.get_table()
-
-        table.insert({"id": 1, "name": "Alex", "age": 20})
-
-        inputs = ["9", "", "Alex", "", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Alex", output)
-
-    def test_sort_records(self):
-
-        self.tui.db.create_table("students", {"id": "int", "name": "str", "age": "int"})
-
-        table = self.tui.db.get_table()
-
-        table.insert({"id": 2, "name": "Bob", "age": 30})
-
-        table.insert({"id": 1, "name": "Alex", "age": 20})
-
-        inputs = ["7", "id", "asc", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Alex", output)
-                self.assertIn("Bob", output)
-
-    def test_value_error(self):
-
-        inputs = ["1", "students", "abc", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Ошибка ввода числа", output)
-
-    def test_database_error(self):
-
-        inputs = ["3", "0"]
-
-        with patch("builtins.input", side_effect=inputs):
-            with patch("sys.stdout", new=StringIO()) as fake_out:
-
-                self.tui.run()
-
-                output = fake_out.getvalue()
-
-                self.assertIn("Ошибка:", output)
+    def create_tui(self, choice="1"):
+        with patch("builtins.input", side_effect=[choice]), patch(
+            "sys.stdout", new_callable=io.StringIO
+        ):
+            return TUI()
+
+    def run_tui(self, inputs, choice="1"):
+        tui = self.create_tui(choice)
+
+        with patch("builtins.input", side_effect=inputs), patch(
+            "sys.stdout", new_callable=io.StringIO
+        ) as output:
+            tui.run()
+            return output.getvalue()
+
+    def test_init_selects_memory_database_by_default(self):
+        tui = self.create_tui("1")
+        self.assertIsInstance(tui.db, Database)
+
+    def test_init_selects_json_database(self):
+        with patch("src.db.tui.JsonFileDatabase") as fake_json:
+            fake_json.return_value = object()
+            with patch("builtins.input", side_effect=["2"]), patch(
+                "sys.stdout", new_callable=io.StringIO
+            ):
+                tui = TUI()
+
+        self.assertIs(tui.db, fake_json.return_value)
+
+    def test_init_selects_csv_database(self):
+        with patch("src.db.tui.CsvFileDatabase") as fake_csv:
+            fake_csv.return_value = object()
+            with patch("builtins.input", side_effect=["3"]), patch(
+                "sys.stdout", new_callable=io.StringIO
+            ):
+                tui = TUI()
+
+        self.assertIs(tui.db, fake_csv.return_value)
+
+    def test_create_table_and_list_tables(self):
+        output = self.run_tui(
+            [
+                "1",  # создать таблицу
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "6",  # список таблиц
+                "0",  # выход
+            ]
+        )
+
+        self.assertIn("Создано.", output)
+        self.assertIn("students", output)
+        self.assertIn("Выход", output)
+
+    def test_add_and_show_record(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "3",
+                "0",
+            ]
+        )
+
+        self.assertIn("Запись добавлена.", output)
+        self.assertIn("{'id': 1, 'name': 'Иван'}", output)
+
+    def test_add_record_repeats_input_after_validation_error(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "abc",  # ошибка int
+                "1",  # повторный ввод id
+                "123",  # ошибка str: только цифры
+                "Иван",  # повторный ввод name
+                "3",
+                "0",
+            ]
+        )
+
+        self.assertIn("Ошибка типа поля 'id'", output)
+        self.assertIn("Ошибка типа поля 'name'", output)
+        self.assertIn("{'id': 1, 'name': 'Иван'}", output)
+
+    def test_update_record_by_field_filter(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "4",
+                "id",
+                "1",
+                "",
+                "name",
+                "Петр",
+                "3",
+                "0",
+            ]
+        )
+
+        self.assertIn("Обновлено: 1", output)
+        self.assertIn("{'id': 1, 'name': 'Петр'}", output)
+
+    def test_update_record_by_value_filter(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "4",
+                "",
+                "",
+                "Иван",
+                "name",
+                "Петр",
+                "3",
+                "0",
+            ]
+        )
+
+        self.assertIn("Обновлено: 1", output)
+        self.assertIn("Петр", output)
+
+    def test_delete_record_by_field_filter(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "5",
+                "id",
+                "1",
+                "",
+                "0",
+            ]
+        )
+
+        self.assertIn("Удалено: 1", output)
+
+    def test_delete_record_by_value_filter(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "5",
+                "",
+                "",
+                "Иван",
+                "0",
+            ]
+        )
+
+        self.assertIn("Удалено: 1", output)
+
+    def test_sort_records_descending(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "2",
+                "2",
+                "Петр",
+                "7",
+                "id",
+                "desc",
+                "0",
+            ]
+        )
+
+        self.assertIn("{'id': 2, 'name': 'Петр'}", output)
+        self.assertIn("{'id': 1, 'name': 'Иван'}", output)
+
+    def test_switch_table_and_search(self):
+        output = self.run_tui(
+            [
+                "1",
+                "students",
+                "2",
+                "id",
+                "int",
+                "name",
+                "str",
+                "2",
+                "1",
+                "Иван",
+                "1",
+                "teachers",
+                "1",
+                "id",
+                "int",
+                "8",
+                "students",
+                "9",
+                "1",
+                "",
+                "0",
+            ]
+        )
+
+        self.assertIn("Переключено на: students", output)
+        self.assertIn("{'id': 1, 'name': 'Иван'}", output)
+
+    def test_invalid_number_input(self):
+        output = self.run_tui(["1", "students", "abc", "0"])
+
+        self.assertIn("Ошибка ввода числа", output)
+
+    def test_database_error_is_printed(self):
+        output = self.run_tui(["2", "0"])
+
+        self.assertIn("Ошибка:", output)
+        self.assertIn("Таблица не создана", output)
+
+
+if __name__ == "__main__":
+    unittest.main()

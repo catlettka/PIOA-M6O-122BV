@@ -45,3 +45,13 @@ class InvalidSchemaError(DatabaseError):
 class RecordNotFoundError(DatabaseError):
     def __init__(self):
         super().__init__("Записи не найдены.")
+
+
+class FileStorageError(DatabaseError):
+    def __init__(self, msg="Ошибка работы с файловым хранилищем."):
+        super().__init__(msg)
+
+
+class InvalidStorageDataError(DatabaseError):
+    def __init__(self, msg="Файл содержит некорректные данные."):
+        super().__init__(msg)
