@@ -19,6 +19,7 @@ class Table:
     - rows (записи)
     """
 
+    # допустимые типы данных для полей таблицы
     ALLOWED_TYPES = {"int", "float", "str"}
 
     def __init__(self, name, schema):
@@ -26,6 +27,7 @@ class Table:
         self.schema = schema
         self.rows = []
 
+    # проверяет значение поля и приводит его к нужному типу
     def validate(self, field, value):
         if field not in self.schema:
             raise InvalidFieldError(field)
@@ -54,6 +56,7 @@ class Table:
 
         raise InvalidTypeError(field, "int/float/str")
 
+    # добавляет новую запись в таблицу после проверки всех полей
     def insert(self, record):
         validated = {}
 
@@ -65,9 +68,11 @@ class Table:
 
         self.rows.append(validated)
 
+    # возвращает копии всех записей таблицы
     def select(self):
         return [row.copy() for row in self.rows]
 
+    # сортирует записи таблицы по указанному полю
     def sort(self, field, asc=True):
         if field not in self.schema:
             raise InvalidFieldError(field)
@@ -77,6 +82,7 @@ class Table:
 
         return sorted(self.select(), key=lambda x: x[field], reverse=not asc)
 
+    # ищет записи по заданным фильтрам
     def search(self, filters=None):
         if not self.rows:
             raise EmptyTableError()
@@ -105,6 +111,7 @@ class Table:
 
         return result
 
+    # обновляет записи, подходящие под фильтр
     def update(self, filters=None, value_filter=None, updates=None):
         if not self.rows:
             raise EmptyTableError()
@@ -141,6 +148,7 @@ class Table:
 
         return count
 
+    # удаляет записи, подходящие под фильтр
     def delete(self, filters=None, value_filter=None):
         if not self.rows:
             raise EmptyTableError()
@@ -192,6 +200,7 @@ class Database:
         self.tables = {}
         self.current = None
 
+    # создаёт новую таблицу с указанной схемо
     def create_table(self, name, schema):
         if not name or not name.strip():
             raise EmptyFieldError()
@@ -218,6 +227,7 @@ class Database:
         self.tables[name] = Table(name, validated_schema)
         self.current = name
 
+    # переключает активную таблицу по имени
     def switch_table(self, name):
         name = name.strip()
 
@@ -226,15 +236,18 @@ class Database:
 
         self.current = name
 
+    # возвращает имя текущей активной таблицы
     def get_current_name(self):
         return self.current or "не выбрана"
 
+    # возвращает текущую активную таблицу
     def get_table(self):
         if not self.tables or self.current is None:
             raise TableNotCreatedError()
 
         return self.tables[self.current]
 
+    # возвращает список всех созданных таблиц
     def list_tables(self):
         if not self.tables:
             raise TableNotCreatedError()

@@ -30,29 +30,35 @@ class CsvFileDatabase(Database):
         self.directory.mkdir(parents=True, exist_ok=True)
         self._load_all_tables()
 
+    # создаёт новую таблицу и сразу сохраняет её в csv-файл
     def create_table(self, name, schema):
         self._validate_table_name(name)
         super().create_table(name, schema)
         self._save_table(name.strip())
 
+    # сохраняет текущую активную таблицу в csv-файл
     def save_current(self):
         if self.current is None:
             raise TableNotCreatedError()
 
         self._save_table(self.current)
 
+    # сохраняет все таблицы базы данных в csv-файлы
     def save_all(self):
         for table_name in self.tables:
             self._save_table(table_name)
 
+    # проверяет имя таблицы, чтобы в нём не было символов пути
     def _validate_table_name(self, name):
         if any(separator in name for separator in ("/", "\\")):
             raise InvalidSchemaError(name)
 
+    # возвращает путь к csv-файлу таблиц
     def _get_table_path(self, table_name):
         self._validate_table_name(table_name)
         return self.directory / f"{table_name}.csv"
 
+    # сохраняет указанную таблицу в отдельный csv-файл
     def _save_table(self, table_name):
         if table_name not in self.tables:
             raise TableNotCreatedError()
@@ -77,6 +83,7 @@ class CsvFileDatabase(Database):
         except OSError as error:
             raise FileStorageError("Не удалось сохранить CSV-файл таблицы.") from error
 
+    # загружает все csv-файлы из папки хранилища
     def _load_all_tables(self):
         try:
             paths = sorted(self.directory.glob("*.csv"))
@@ -92,6 +99,7 @@ class CsvFileDatabase(Database):
         if self.tables:
             self.current = next(iter(self.tables))
 
+    # загружает одну таблицу из csv-файла и проверяет её данные
     def _load_table_from_path(self, path):
         try:
             with path.open("r", encoding="utf-8", newline="") as file:
@@ -139,6 +147,7 @@ class CsvFileDatabase(Database):
 
         return table
 
+    # разбирает строку схемы csv-файла
     def _parse_schema_row(self, cells, file_name):
         schema = {}
 

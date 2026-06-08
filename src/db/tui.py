@@ -38,6 +38,7 @@ class TUI:
             c = input(">>> ").strip()
 
             try:
+                # создание новой таблицы
                 if c == "1":
                     name = input("Имя таблицы: ").strip()
                     n = int(input("Количество полей: "))
@@ -51,6 +52,7 @@ class TUI:
                     self.db.create_table(name, schema)
                     print("Создано.")
 
+                # добавление новой записи в текущую таблицу
                 elif c == "2":
                     table = self.db.get_table()
                     record = {}
@@ -70,12 +72,14 @@ class TUI:
                     self.db.save_current()
                     print("Запись добавлена.")
 
+                # вывод всех записей текущей таблицы
                 elif c == "3":
                     table = self.db.get_table()
 
                     for r in table.select():
                         print(r)
 
+                # обновление записей по фильтру
                 elif c == "4":
                     table = self.db.get_table()
                     print("\n=== ОБНОВЛЕНИЕ ===")
@@ -99,6 +103,7 @@ class TUI:
                     self.db.save_current()
                     print("Обновлено:", updated)
 
+                # удаление записей по фильтру
                 elif c == "5":
                     table = self.db.get_table()
                     print("\n=== УДАЛЕНИЕ ===")
@@ -119,9 +124,11 @@ class TUI:
                     self.db.save_current()
                     print("Удалено:", deleted)
 
+                # вывод списка всех таблиц
                 elif c == "6":
                     print(self.db.list_tables())
 
+                # сортировка записей текущей таблицы
                 elif c == "7":
                     table = self.db.get_table()
                     f = input("Поле сортировки: ").strip()
@@ -131,11 +138,13 @@ class TUI:
                     for r in table.sort(f, asc):
                         print(r)
 
+                # переключение активной таблицы
                 elif c == "8":
                     name = input("Имя таблицы: ").strip()
                     self.db.switch_table(name)
                     print("Переключено на:", name)
 
+                # поиск записей по полям
                 elif c == "9":
                     table = self.db.get_table()
                     print("Поиск (Enter = пропустить поле)")
@@ -149,6 +158,7 @@ class TUI:
                     for r in table.search(filters):
                         print(r)
 
+                # выход из программы
                 elif c == "0":
                     self.db.save_all()
                     print("Выход")

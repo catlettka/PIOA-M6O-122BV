@@ -15,35 +15,42 @@ from .memory import Database, Table
 class JsonFileDatabase(Database):
     """Файловая база данных, сохраняющая каждую таблицу в отдельный JSON-файл."""
 
+    # создаёт JSON-хранилище, создаёт папку data_json и загружает таблицы
     def __init__(self, directory="data_json"):
         super().__init__()
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self._load_all_tables()
 
+    # создаёт новую таблицу и сразу сохраняет её в JSON-файл
     def create_table(self, name, schema):
         self._validate_table_name(name)
         super().create_table(name, schema)
         self._save_table(name.strip())
 
+    # сохраняет текущую активную таблицу в json-файл
     def save_current(self):
         if self.current is None:
             raise TableNotCreatedError()
 
         self._save_table(self.current)
 
+    # сохраняет все таблицы базы данных в JSON-файлы
     def save_all(self):
         for table_name in self.tables:
             self._save_table(table_name)
 
+    # проверяет имя таблицы, чтобы в нём не было символов пути
     def _validate_table_name(self, name):
         if any(separator in name for separator in ("/", "\\")):
             raise InvalidSchemaError(name)
 
+    # возвращает путь к JSON-файлу таблицы
     def _get_table_path(self, table_name):
         self._validate_table_name(table_name)
         return self.directory / f"{table_name}.json"
 
+    # сохраняет указанную таблицу в отдельный JSON-файл
     def _save_table(self, table_name):
         if table_name not in self.tables:
             raise TableNotCreatedError()
@@ -61,6 +68,7 @@ class JsonFileDatabase(Database):
         except OSError as error:
             raise FileStorageError("Не удалось сохранить JSON-файл таблицы.") from error
 
+    # загружает все JSON-файлы из папки хранилища
     def _load_all_tables(self):
         try:
             paths = sorted(self.directory.glob("*.json"))
@@ -76,6 +84,7 @@ class JsonFileDatabase(Database):
         if self.tables:
             self.current = next(iter(self.tables))
 
+    # загружает одну таблицу из JSON-файла и проверяет её данные
     def _load_table_from_path(self, path):
         try:
             with path.open("r", encoding="utf-8") as file:
@@ -127,6 +136,7 @@ class JsonFileDatabase(Database):
 
         return table
 
+    # "проверяет схему таблицы, загруженную из JSON-файла
     def _validate_schema_from_storage(self, schema):
         result = {}
 
